@@ -2,7 +2,7 @@ import { pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { InferInsertModel, InferSelectModel, relations, sql } from "drizzle-orm";
 import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
-import { boardColumns } from "./bord-columns.schema";
+import { boardColumns, BoardColumnWithTasks } from "./bord-columns.schema";
 
 export const workspaces = pgTable("workspaces", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -29,6 +29,10 @@ export const workspacesRelations = relations(workspaces, ({ many }) => ({
 export type Workspace = InferSelectModel<typeof workspaces>;
 export type WorkspaceInsert = InferInsertModel<typeof workspaces>;
 export type WorkspaceUpdate = Partial<WorkspaceInsert>;
+
+export type WorkspaceWithColumnsAndTasks = Workspace & {
+    columns: BoardColumnWithTasks[];
+};
 
 export const workspaceInsertSchema = createInsertSchema(workspaces)
     .omit({ id: true })

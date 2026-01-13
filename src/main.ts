@@ -15,13 +15,17 @@ async function bootstrap() {
     );
 
     app.setGlobalPrefix("/api");
+    app.enableCors({
+        origin: ["http://localhost:4200"],
+        methods: ["GET", "POST", "PATCH"],
+    });
     app.useGlobalFilters(new AllExceptionsFilter());
 
     const customCss = readFileSync(join(__dirname, "..", "swagger.css"), "utf8");
 
     const config = new DocumentBuilder()
         .setTitle("Api de Kanbano")
-        .setDescription("Documentation de l'API de" + " kanbano")
+        .setDescription("Documentation de l'API de Kanbano")
         .setVersion("0.0.1")
         .build();
 

@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, uuid, varchar, integer } from "drizzle-orm/pg-core";
+import { integer, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { InferInsertModel, InferSelectModel, relations, sql } from "drizzle-orm";
@@ -40,9 +40,10 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
 export type Task = InferSelectModel<typeof tasks>;
 export type TaskInsert = InferInsertModel<typeof tasks>;
 export type TaskUpdate = Partial<TaskInsert>;
+export type TaskReorder = z.infer<typeof taskReorderSchema>;
 
 export const taskInsertSchema = createInsertSchema(tasks)
-    .omit({ id: true, order: true })
+    .omit({ id: true, order: true, createdAt: true, updatedAt: true })
     .extend({
         title: z.string().trim().min(5, "Le titre doit contenir au moins 5 caractères"),
         description: z.string().trim().min(1, "La description est obligatoire"),
@@ -52,6 +53,7 @@ export const taskInsertSchema = createInsertSchema(tasks)
 
 export const taskReorderSchema = z.object({
     newOrder: z.number().int().min(0, "L'ordre doit être un nombre positif"),
+    newColumnId: z.string().uuid("L'ID de la colonne doit être un UUID valide").optional(),
 });
 
 export const taskUpdateSchema = createUpdateSchema(tasks)

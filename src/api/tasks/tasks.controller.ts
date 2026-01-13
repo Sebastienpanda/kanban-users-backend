@@ -1,10 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
 import { TasksService } from "@api/tasks/tasks.service";
-import type { Task, TaskInsert, TaskUpdate } from "@db/task.schema";
+import type { Task, TaskInsert, TaskUpdate, TaskReorder } from "@db/task.schema";
 import { taskInsertSchema, taskUpdateSchema, taskReorderSchema } from "@db/task.schema";
 import { ZodValidationPipe } from "@common/zod-validation.pipe";
 import { ApiTags } from "@nestjs/swagger";
-import { z } from "zod";
 import { ApiCreateTaskSwaggerDecorator } from "@api/tasks/decorators/api-create-task-swagger.decorator";
 import { ApiGetAllTasksDocSwaggerDecorator } from "@api/tasks/decorators/api-find-all-task-swagger.decorator";
 import { ApiGetOneTaskSwaggerDecorator } from "@api/tasks/decorators/api-find-one-task-swagger.decorator";
@@ -18,7 +17,7 @@ export class TasksController {
     @Post()
     @HttpCode(HttpStatus.CREATED)
     @ApiCreateTaskSwaggerDecorator()
-    async create(@Body(new ZodValidationPipe(taskInsertSchema)) payload: TaskInsert): Promise<Task> {
+    create(@Body(new ZodValidationPipe(taskInsertSchema)) payload: TaskInsert): Promise<Task> {
         return this.tasksService.create(payload);
     }
 
@@ -48,10 +47,10 @@ export class TasksController {
 
     @Patch(":id/reorder")
     @HttpCode(HttpStatus.OK)
-    async reorder(
+    reorder(
         @Param("id", ParseUUIDPipe) id: string,
-        @Body(new ZodValidationPipe(taskReorderSchema)) payload: z.infer<typeof taskReorderSchema>,
+        @Body(new ZodValidationPipe(taskReorderSchema)) payload: TaskReorder,
     ): Promise<Task> {
-        return this.tasksService.reorder(id, payload.newOrder);
+        return this.tasksService.reorder(id, payload.newOrder, payload.newColumnId);
     }
 }

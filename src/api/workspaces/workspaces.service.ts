@@ -1,7 +1,15 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Workspace, WorkspaceInsert, workspaces, WorkspaceUpdate } from "@db/workspace.schema";
+import {
+    Workspace,
+    WorkspaceInsert,
+    workspaces,
+    WorkspaceUpdate,
+    WorkspaceWithColumnsAndTasks,
+} from "@db/workspace.schema";
 import { DrizzleService } from "@drizzle/drizzle.service";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+import { boardColumns } from "@db/bord-columns.schema";
+import { tasks } from "@db/task.schema";
 
 @Injectable()
 export class WorkspacesService {
@@ -31,49 +39,34 @@ export class WorkspacesService {
         return this.drizzleService.db.select().from(workspaces);
     }
 
-    async findAllWithColumns() {
-        return this.drizzleService.db.query.workspaces.findMany({
-            with: {
-                columns: {
-                    with: {
-                        tasks: {
-                            orderBy: (tasks, { asc }) => [asc(tasks.order)],
-                        },
-                    },
-                },
-            },
-        });
+    async findOne(id: string): Promise<WorkspaceWithColumnsAndTasks> {
+        return this.findWorkspaceWithRelations(id);
     }
 
-    async findOne(id: string): Promise<Workspace> {
-        const [data] = await this.drizzleService.db.select().from(workspaces).where(eq(workspaces.id, id));
-
-        if (!data) {
-            throw new NotFoundException("Le workspace n'existe pas");
-        }
-
-        return data;
+    async findOneWithColumns(id: string): Promise<WorkspaceWithColumnsAndTasks> {
+        return this.findWorkspaceWithRelations(id);
     }
 
-    async findOneWithColumns(id: string) {
-        const data = await this.drizzleService.db.query.workspaces.findFirst({
+    private async findWorkspaceWithRelations(id: string): Promise<WorkspaceWithColumnsAndTasks> {
+        const workspace = await this.drizzleService.db.query.workspaces.findFirst({
             where: eq(workspaces.id, id),
             with: {
                 columns: {
+                    orderBy: asc(boardColumns.position),
                     with: {
                         tasks: {
-                            orderBy: (tasks, { asc }) => [asc(tasks.order)],
+                            orderBy: asc(tasks.order),
                         },
                     },
                 },
             },
         });
 
-        if (!data) {
+        if (!workspace) {
             throw new NotFoundException("Le workspace n'existe pas");
         }
 
-        return data;
+        return workspace;
     }
 
     async update(id: string, payload: WorkspaceUpdate): Promise<Workspace> {
