@@ -1,10 +1,11 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import { AllExceptionsFilter } from "./common/all-exceptions-filter.filter";
+import { AllExceptionsFilter } from "@common/all-exceptions-filter.filter";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ConfigService } from "@nestjs/config";
 
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -34,7 +35,8 @@ async function bootstrap() {
         customSiteTitle: "Kanban Documentation Api",
         customCss,
     });
-    const port = process.env.PORT || 3000;
+    const configS = app.get(ConfigService);
+    const port = Number(configS.get("PORT"));
     await app.listen(port, "0.0.0.0");
 }
 bootstrap();
