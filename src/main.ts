@@ -17,7 +17,7 @@ async function bootstrap() {
 
     app.setGlobalPrefix("/api");
     app.enableCors({
-        origin: ["http://localhost:4200"],
+        origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
         methods: ["GET", "POST", "PATCH"],
     });
     app.useGlobalFilters(new AllExceptionsFilter());
