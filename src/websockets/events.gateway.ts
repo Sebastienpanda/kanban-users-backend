@@ -5,7 +5,7 @@ import { BoardColumns } from "@db/bord-columns.schema";
 
 @WebSocketGateway({
     cors: {
-        origin: "http://localhost:4200",
+        origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
     },
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
