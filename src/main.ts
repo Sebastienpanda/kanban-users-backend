@@ -12,10 +12,12 @@ async function bootstrap() {
         AppModule,
         new FastifyAdapter({
             logger: true,
+            trustProxy: true,
         }),
     );
 
     app.setGlobalPrefix("/api");
+
     app.enableCors({
         origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
         methods: ["GET", "POST", "PATCH"],
