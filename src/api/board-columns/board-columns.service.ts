@@ -3,10 +3,14 @@ import { DrizzleService } from "@drizzle/drizzle.service";
 import { boardColumns, BoardColumns, BoardColumnsInsert, BoardColumnsUpdate } from "@db/bord-columns.schema";
 import { tasks, Task } from "@db/task.schema";
 import { and, asc, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
+import { EventsGateway } from "../../websockets/events.gateway";
 
 @Injectable()
 export class BoardColumnsService {
-    constructor(private readonly drizzleService: DrizzleService) {}
+    constructor(
+        private readonly drizzleService: DrizzleService,
+        private readonly eventsGateway: EventsGateway,
+    ) {}
 
     async create(payload: BoardColumnsInsert): Promise<BoardColumns> {
         const existing = await this.drizzleService.db
@@ -113,7 +117,7 @@ export class BoardColumnsService {
             return column;
         }
 
-        return await this.drizzleService.db.transaction(async (tx) => {
+        const updatedColumn = await this.drizzleService.db.transaction(async (tx) => {
             if (newPosition < oldPosition) {
                 await tx
                     .update(boardColumns)
@@ -138,13 +142,16 @@ export class BoardColumnsService {
                     );
             }
 
-            const [updatedColumn] = await tx
+            const [result] = await tx
                 .update(boardColumns)
                 .set({ position: newPosition })
                 .where(eq(boardColumns.id, id))
                 .returning();
 
-            return updatedColumn;
+            return result;
         });
+
+        this.eventsGateway.emitColumnReordered(updatedColumn);
+        return updatedColumn;
     }
 }

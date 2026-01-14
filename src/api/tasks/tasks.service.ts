@@ -3,10 +3,14 @@ import { DrizzleService } from "@drizzle/drizzle.service";
 import { and, asc, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
 import { Task, TaskInsert, tasks, TaskUpdate } from "@db/task.schema";
 import { boardColumns } from "@db/bord-columns.schema";
+import { EventsGateway } from "../../websockets/events.gateway";
 
 @Injectable()
 export class TasksService {
-    constructor(private readonly drizzleService: DrizzleService) {}
+    constructor(
+        private readonly drizzleService: DrizzleService,
+        private readonly eventsGateway: EventsGateway,
+    ) {}
 
     private getStatusFromColumnName(columnName: string): "todo" | "in_progress" | "done" {
         const normalizedName = columnName.toLowerCase().trim();
@@ -16,6 +20,15 @@ export class TasksService {
         if (normalizedName === "terminé") return "done";
 
         throw new Error(`Nom de colonne invalide: ${columnName}`);
+    }
+
+    private getColumnNameFromStatus(status: "todo" | "in_progress" | "done"): string {
+        const mapping: Record<string, string> = {
+            todo: "À faire",
+            in_progress: "En cours",
+            done: "Terminé",
+        };
+        return mapping[status];
     }
 
     async create(payload: TaskInsert): Promise<Task> {
@@ -47,6 +60,10 @@ export class TasksService {
             })
             .returning();
 
+        console.log(`[TasksService] Tâche créée, émission websocket...`);
+        this.eventsGateway.emitTaskCreated(newTask);
+        console.log(`[TasksService] Websocket émis`);
+
         return newTask;
     }
 
@@ -65,7 +82,56 @@ export class TasksService {
     }
 
     async update(id: string, payload: TaskUpdate): Promise<Task> {
+        const oldTask = await this.findOne(id);
+
+        // Si le status change, on doit aussi changer la colonne
+        if (payload.status && payload.status !== oldTask.status) {
+            // Récupérer la colonne actuelle pour trouver le workspace
+            const [currentColumn] = await this.drizzleService.db
+                .select()
+                .from(boardColumns)
+                .where(eq(boardColumns.id, oldTask.columnId))
+                .limit(1);
+
+            // Trouver la colonne correspondant au nouveau status dans le même workspace
+            const targetColumnName = this.getColumnNameFromStatus(payload.status);
+            const [targetColumn] = await this.drizzleService.db
+                .select()
+                .from(boardColumns)
+                .where(
+                    and(
+                        eq(boardColumns.workspaceId, currentColumn.workspaceId),
+                        eq(boardColumns.name, targetColumnName),
+                    ),
+                )
+                .limit(1);
+
+            if (!targetColumn) {
+                throw new NotFoundException(`La colonne "${targetColumnName}" n'existe pas dans ce workspace`);
+            }
+
+            // Calculer le nouvel ordre (à la fin de la colonne cible)
+            const [maxOrderResult] = await this.drizzleService.db
+                .select({ maxOrder: max(tasks.order) })
+                .from(tasks)
+                .where(eq(tasks.columnId, targetColumn.id));
+
+            const newOrder = maxOrderResult.maxOrder !== null ? maxOrderResult.maxOrder + 1 : 0;
+
+            const [updated] = await this.drizzleService.db
+                .update(tasks)
+                .set({ ...payload, columnId: targetColumn.id, order: newOrder })
+                .where(eq(tasks.id, id))
+                .returning();
+
+            this.eventsGateway.emitTaskStatusChanged(updated, oldTask.status);
+
+            return updated;
+        }
+
         const [updated] = await this.drizzleService.db.update(tasks).set(payload).where(eq(tasks.id, id)).returning();
+
+        this.eventsGateway.emitTaskUpdated(updated);
 
         return updated;
     }
@@ -78,7 +144,7 @@ export class TasksService {
         const targetColumnId = newColumnId || oldColumnId;
 
         if (newColumnId && newColumnId !== oldColumnId) {
-            return await this.drizzleService.db.transaction(async (tx) => {
+            const updatedTask = await this.drizzleService.db.transaction(async (tx) => {
                 // Récupérer la colonne cible pour obtenir le status correspondant
                 const [targetColumn] = await tx
                     .select()
@@ -105,21 +171,24 @@ export class TasksService {
                     .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)));
 
                 // Mettre à jour la tâche avec le nouveau order, columnId ET status
-                const [updatedTask] = await tx
+                const [result] = await tx
                     .update(tasks)
                     .set({ order: newOrder, columnId: targetColumnId, status: newStatus })
                     .where(eq(tasks.id, id))
                     .returning();
 
-                return updatedTask;
+                return result;
             });
+
+            this.eventsGateway.emitTaskReordered(updatedTask);
+            return updatedTask;
         }
 
         if (oldOrder === newOrder) {
             return task;
         }
 
-        return await this.drizzleService.db.transaction(async (tx) => {
+        const updatedTask = await this.drizzleService.db.transaction(async (tx) => {
             if (newOrder < oldOrder) {
                 await tx
                     .update(tasks)
@@ -136,9 +205,12 @@ export class TasksService {
                     );
             }
 
-            const [updatedTask] = await tx.update(tasks).set({ order: newOrder }).where(eq(tasks.id, id)).returning();
+            const [result] = await tx.update(tasks).set({ order: newOrder }).where(eq(tasks.id, id)).returning();
 
-            return updatedTask;
+            return result;
         });
+
+        this.eventsGateway.emitTaskReordered(updatedTask);
+        return updatedTask;
     }
 }

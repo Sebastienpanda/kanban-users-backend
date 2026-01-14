@@ -1,22 +1,26 @@
-import { ConfigService } from '@nestjs/config';
-import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import * as schema from '@db/schema';
+import { ConfigService } from "@nestjs/config";
+import { neonConfig, Pool } from "@neondatabase/serverless";
+import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
+import * as schema from "@db/schema";
+import ws from "ws";
 
-export const DRIZZLE = Symbol('DRIZZLE');
+neonConfig.webSocketConstructor = ws;
+
+export const DRIZZLE = Symbol("DRIZZLE");
 
 export const drizzleProvider = [
-  {
-    provide: DRIZZLE,
-    inject: [ConfigService],
-    useFactory: (
-      configService: ConfigService,
-    ): NeonHttpDatabase<typeof schema> => {
-      const connectionString = configService.getOrThrow<string>('DATABASE_URL');
+    {
+        provide: DRIZZLE,
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService): NeonDatabase<typeof schema> => {
+            const connectionString = configService.getOrThrow<string>("DATABASE_URL");
 
-      return drizzle(connectionString, {
-        schema,
-        logger: true,
-      });
+            const pool = new Pool({ connectionString });
+
+            return drizzle(pool, {
+                schema,
+                logger: true,
+            });
+        },
     },
-  },
 ];
