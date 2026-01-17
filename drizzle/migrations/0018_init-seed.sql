@@ -1,1 +1,0 @@
-ALTER TABLE "board_columns" DROP CONSTRAINT "unique_name_per_workspace";

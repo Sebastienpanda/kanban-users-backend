@@ -7,6 +7,7 @@ import ws from "ws";
 neonConfig.webSocketConstructor = ws;
 
 export const DRIZZLE = Symbol("DRIZZLE");
+export const DATABASE_CONNECTION_STRING = Symbol("DATABASE_CONNECTION_STRING");
 
 export const drizzleProvider = [
     {
@@ -21,6 +22,13 @@ export const drizzleProvider = [
                 schema,
                 logger: true,
             });
+        },
+    },
+    {
+        provide: DATABASE_CONNECTION_STRING,
+        inject: [ConfigService],
+        useFactory: (configService: ConfigService): string => {
+            return configService.getOrThrow<string>("DATABASE_URL");
         },
     },
 ];

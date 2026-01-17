@@ -12,31 +12,14 @@ export class TasksService {
         private readonly eventsGateway: EventsGateway,
     ) {}
 
-    private getStatusFromColumnName(columnName: string): "todo" | "in_progress" | "done" {
-        const normalizedName = columnName.toLowerCase().trim();
-
-        if (normalizedName === "à faire") return "todo";
-        if (normalizedName === "en cours") return "in_progress";
-        if (normalizedName === "terminé") return "done";
-
-        throw new Error(`Nom de colonne invalide: ${columnName}`);
-    }
-
-    private getColumnNameFromStatus(status: "todo" | "in_progress" | "done"): string {
-        const mapping: Record<string, string> = {
-            todo: "À faire",
-            in_progress: "En cours",
-            done: "Terminé",
-        };
-        return mapping[status];
-    }
-
-    async create(payload: TaskInsert): Promise<Task> {
+    async create(payload: TaskInsert, userId: string): Promise<Task> {
         const existing = await this.drizzleService.db
             .select()
             .from(tasks)
             .where(eq(tasks.title, payload.title))
             .limit(1);
+
+        console.log("[TasksService] Résultat select:", existing);
 
         if (existing.length > 0) {
             throw new ConflictException("Tâche déjà existante");
@@ -52,11 +35,9 @@ export class TasksService {
         const [newTask] = await this.drizzleService.db
             .insert(tasks)
             .values({
-                title: payload.title,
-                description: payload.description,
-                status: payload.status,
-                columnId: payload.columnId,
+                ...payload,
                 order: nextOrder,
+                userId,
             })
             .returning();
 
@@ -212,5 +193,24 @@ export class TasksService {
 
         this.eventsGateway.emitTaskReordered(updatedTask);
         return updatedTask;
+    }
+
+    private getStatusFromColumnName(columnName: string): "todo" | "in_progress" | "done" {
+        const normalizedName = columnName.toLowerCase().trim();
+
+        if (normalizedName === "à faire") return "todo";
+        if (normalizedName === "en cours") return "in_progress";
+        if (normalizedName === "terminé") return "done";
+
+        throw new Error(`Nom de colonne invalide: ${columnName}`);
+    }
+
+    private getColumnNameFromStatus(status: "todo" | "in_progress" | "done"): string {
+        const mapping: Record<string, string> = {
+            todo: "À faire",
+            in_progress: "En cours",
+            done: "Terminé",
+        };
+        return mapping[status];
     }
 }

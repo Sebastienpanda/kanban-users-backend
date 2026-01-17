@@ -1,13 +1,26 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post } from "@nestjs/common";
+import {
+    Body,
+    Controller,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    UseGuards,
+} from "@nestjs/common";
 import { TasksService } from "@api/tasks/tasks.service";
-import type { Task, TaskInsert, TaskUpdate, TaskReorder } from "@db/task.schema";
-import { taskInsertSchema, taskUpdateSchema, taskReorderSchema } from "@db/task.schema";
+import type { Task, TaskInsert, TaskReorder, TaskUpdate } from "@db/task.schema";
+import { taskInsertSchema, taskReorderSchema, taskUpdateSchema } from "@db/task.schema";
 import { ZodValidationPipe } from "@common/zod-validation.pipe";
 import { ApiTags } from "@nestjs/swagger";
 import { ApiCreateTaskSwaggerDecorator } from "@api/tasks/decorators/api-create-task-swagger.decorator";
 import { ApiGetAllTasksDocSwaggerDecorator } from "@api/tasks/decorators/api-find-all-task-swagger.decorator";
 import { ApiGetOneTaskSwaggerDecorator } from "@api/tasks/decorators/api-find-one-task-swagger.decorator";
 import { ApiUpdateTaskSwaggerDecorator } from "@api/tasks/decorators/api-update-task-swagger.decorator.ts.decorator";
+import { AuthGuard } from "../../auth.guard";
+import { AccessToken } from "../../access-token.decorator";
 
 @ApiTags("tasks")
 @Controller("tasks")
@@ -16,9 +29,13 @@ export class TasksController {
 
     @Post()
     @HttpCode(HttpStatus.CREATED)
+    @UseGuards(AuthGuard)
     @ApiCreateTaskSwaggerDecorator()
-    create(@Body(new ZodValidationPipe(taskInsertSchema)) payload: TaskInsert): Promise<Task> {
-        return this.tasksService.create(payload);
+    create(
+        @AccessToken() userId: string,
+        @Body(new ZodValidationPipe(taskInsertSchema)) payload: TaskInsert,
+    ): Promise<Task> {
+        return this.tasksService.create(payload, userId);
     }
 
     @Get()

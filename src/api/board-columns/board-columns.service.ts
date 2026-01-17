@@ -39,6 +39,7 @@ export class BoardColumnsService {
             })
             .returning();
 
+        this.eventsGateway.emitColumnCreated(newBoardColumns);
         return newBoardColumns;
     }
 

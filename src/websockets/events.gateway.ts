@@ -2,12 +2,12 @@ import { OnGatewayConnection, OnGatewayDisconnect, WebSocketGateway, WebSocketSe
 import { Server, Socket } from "socket.io";
 import { Task } from "@db/task.schema";
 import { BoardColumns } from "@db/bord-columns.schema";
+import { Workspace } from "@db/workspace.schema";
 
 @WebSocketGateway({
     cors: {
         origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
     },
-    transports: ["websocket", "polling"],
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
@@ -48,5 +48,15 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     emitColumnReordered(column: BoardColumns): void {
         console.log(`[WS] Émission column:reordered`, column);
         this.server.emit("column:reordered", column);
+    }
+
+    emitColumnCreated(column: BoardColumns): void {
+        console.log(`[WS] Émission column:created`, column);
+        this.server.emit("column:created", column);
+    }
+
+    emitWorkspaceCreated(workspace: Workspace): void {
+        console.log(`[WS] Émission workspace:created`, workspace);
+        this.server.emit("workspace:created", workspace);
     }
 }

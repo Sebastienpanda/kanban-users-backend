@@ -1,2 +1,0 @@
-ALTER TABLE "board_columns" ADD COLUMN "workspace_id" uuid NOT NULL;--> statement-breakpoint
-ALTER TABLE "board_columns" ADD CONSTRAINT "board_columns_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;

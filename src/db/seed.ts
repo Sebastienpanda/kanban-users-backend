@@ -81,6 +81,7 @@ async function seed() {
                     description,
                     status: column.status,
                     columnId: column.id,
+                    userId: "",
                     order,
                 });
 

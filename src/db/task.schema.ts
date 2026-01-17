@@ -3,6 +3,7 @@ import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { InferInsertModel, InferSelectModel, relations, sql } from "drizzle-orm";
 import { boardColumns } from "./bord-columns.schema";
+import { neonAuthUsers } from "@db/users.schema";
 
 export const taskStatusEnum = pgEnum("task_status", ["todo", "in_progress", "done"]);
 
@@ -15,6 +16,9 @@ export const tasks = pgTable("tasks", {
         .references(() => boardColumns.id, { onDelete: "cascade" })
         .notNull(),
     order: integer("order").notNull().default(0),
+    userId: uuid("user_id")
+        .references(() => neonAuthUsers.id)
+        .notNull(),
     createdAt: timestamp("created_at", {
         precision: 3,
         withTimezone: true,
@@ -43,7 +47,7 @@ export type TaskUpdate = Partial<TaskInsert>;
 export type TaskReorder = z.infer<typeof taskReorderSchema>;
 
 export const taskInsertSchema = createInsertSchema(tasks)
-    .omit({ id: true, order: true, createdAt: true, updatedAt: true })
+    .omit({ id: true, order: true, createdAt: true, updatedAt: true, userId: true })
     .extend({
         title: z.string().trim().min(5, "Le titre doit contenir au moins 5 caractères"),
         description: z.string().trim().min(1, "La description est obligatoire"),

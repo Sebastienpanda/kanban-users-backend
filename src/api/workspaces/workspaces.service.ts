@@ -10,10 +10,14 @@ import { DrizzleService } from "@drizzle/drizzle.service";
 import { asc, eq } from "drizzle-orm";
 import { boardColumns } from "@db/bord-columns.schema";
 import { tasks } from "@db/task.schema";
+import { EventsGateway } from "../../websockets/events.gateway";
 
 @Injectable()
 export class WorkspacesService {
-    constructor(private readonly drizzleService: DrizzleService) {}
+    constructor(
+        private readonly drizzleService: DrizzleService,
+        private readonly eventsGateway: EventsGateway,
+    ) {}
 
     async create(payload: WorkspaceInsert): Promise<Workspace> {
         const existing = await this.drizzleService.db
@@ -32,6 +36,7 @@ export class WorkspacesService {
             })
             .returning();
 
+        this.eventsGateway.emitWorkspaceCreated(newWorkspace);
         return newWorkspace;
     }
 

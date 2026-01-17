@@ -1,1 +1,0 @@
-ALTER TABLE "board_columns" ADD COLUMN "position" integer DEFAULT 0 NOT NULL;
