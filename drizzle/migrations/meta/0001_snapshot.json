@@ -1,6 +1,6 @@
 {
-  "id": "8d98f377-894d-496b-8b8a-863d7a96bbed",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "d63b0e21-6901-45bc-8e9b-4c20db6a1dfa",
+  "prevId": "8d98f377-894d-496b-8b8a-863d7a96bbed",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -360,11 +360,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "statuses_name_unique": {
-          "name": "statuses_name_unique",
+        "statuses_name_workspace_id_unique": {
+          "name": "statuses_name_workspace_id_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "name"
+            "name",
+            "workspace_id"
           ]
         }
       },

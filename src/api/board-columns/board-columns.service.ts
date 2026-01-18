@@ -1,9 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { DrizzleService } from "@drizzle/drizzle.service";
 import { boardColumns, BoardColumns, BoardColumnsInsert, BoardColumnsUpdate } from "@db/bord-columns.schema";
-import { tasks, Task } from "@db/task.schema";
-import { and, asc, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
+import { and, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
 import { EventsGateway } from "../../websockets/events.gateway";
+import { byIdAndUser } from "@common/query-helpers";
+import { workspaces } from "@db/workspace.schema";
 
 @Injectable()
 export class BoardColumnsService {
@@ -12,7 +13,7 @@ export class BoardColumnsService {
         private readonly eventsGateway: EventsGateway,
     ) {}
 
-    async create(payload: BoardColumnsInsert): Promise<BoardColumns> {
+    async create(payload: BoardColumnsInsert, userId: string): Promise<BoardColumns> {
         const existing = await this.drizzleService.db
             .select()
             .from(boardColumns)
@@ -21,6 +22,17 @@ export class BoardColumnsService {
 
         if (existing.length > 0) {
             throw new ConflictException("Board columns déja existante");
+        }
+
+        // Vérifier que le workspace appartient à l'utilisateur
+        const [workspace] = await this.drizzleService.db
+            .select()
+            .from(workspaces)
+            .where(byIdAndUser(workspaces, payload.workspaceId, userId))
+            .limit(1);
+
+        if (!workspace) {
+            throw new NotFoundException("Le workspace n'existe pas ou ne vous appartient pas");
         }
 
         const [maxPositionResult] = await this.drizzleService.db
@@ -33,9 +45,9 @@ export class BoardColumnsService {
         const [newBoardColumns] = await this.drizzleService.db
             .insert(boardColumns)
             .values({
-                name: payload.name,
-                workspaceId: payload.workspaceId,
+                ...payload,
                 position: nextPosition,
+                userId,
             })
             .returning();
 
@@ -43,74 +55,47 @@ export class BoardColumnsService {
         return newBoardColumns;
     }
 
-    async findAll(): Promise<Array<BoardColumns & { tasks: Task[] }>> {
-        const rows = await this.drizzleService.db
+    async findOne(id: string, userId: string): Promise<BoardColumns> {
+        const [data] = await this.drizzleService.db
             .select()
             .from(boardColumns)
-            .leftJoin(tasks, eq(tasks.columnId, boardColumns.id))
-            .orderBy(asc(boardColumns.position), asc(tasks.order));
-
-        const grouped = new Map<string, BoardColumns & { tasks: Task[] }>();
-
-        for (const row of rows) {
-            if (!grouped.has(row.board_columns.id)) {
-                grouped.set(row.board_columns.id, {
-                    ...row.board_columns,
-                    tasks: [],
-                });
-            }
-
-            if (row.tasks) {
-                grouped.get(row.board_columns.id)!.tasks.push(row.tasks);
-            }
-        }
-
-        return Array.from(grouped.values());
-    }
-
-    async findOne(id: string): Promise<BoardColumns> {
-        const [data] = await this.drizzleService.db.select().from(boardColumns).where(eq(boardColumns.id, id));
+            .where(byIdAndUser(boardColumns, id, userId));
 
         if (!data) {
-            throw new NotFoundException("Le boardColumns, n'existe pas");
+            throw new NotFoundException("La colonne n'existe pas ou ne vous appartient pas");
         }
 
         return data;
     }
 
-    async findOneWithTasks(id: string): Promise<BoardColumns & { tasks: Task[] }> {
-        const rows = await this.drizzleService.db
-            .select()
-            .from(boardColumns)
-            .leftJoin(tasks, eq(tasks.columnId, boardColumns.id))
-            .where(eq(boardColumns.id, id))
-            .orderBy(asc(tasks.order));
+    async update(id: string, payload: BoardColumnsUpdate, userId: string): Promise<BoardColumns> {
+        // Vérifier que la colonne appartient à l'utilisateur
+        await this.findOne(id, userId);
 
-        if (rows.length === 0) {
-            throw new NotFoundException("Le boardColumns, n'existe pas");
+        // Vérifier que le nouveau workspace appartient à l'utilisateur si fourni
+        if (payload.workspaceId) {
+            const [workspace] = await this.drizzleService.db
+                .select()
+                .from(workspaces)
+                .where(byIdAndUser(workspaces, payload.workspaceId, userId))
+                .limit(1);
+
+            if (!workspace) {
+                throw new NotFoundException("Le workspace n'existe pas ou ne vous appartient pas");
+            }
         }
 
-        const column = rows[0].board_columns;
-        const columnTasks = rows.filter((row) => row.tasks !== null).map((row) => row.tasks!);
-
-        return {
-            ...column,
-            tasks: columnTasks,
-        };
-    }
-
-    async update(id: string, payload: BoardColumnsUpdate): Promise<BoardColumns> {
         const [updated] = await this.drizzleService.db
             .update(boardColumns)
             .set(payload)
-            .where(eq(boardColumns.id, id))
+            .where(byIdAndUser(boardColumns, id, userId))
             .returning();
 
         return updated;
     }
 
-    async reorder(id: string, newPosition: number): Promise<BoardColumns> {
-        const column = await this.findOne(id);
+    async reorder(id: string, newPosition: number, userId: string): Promise<BoardColumns> {
+        const column = await this.findOne(id, userId);
 
         const oldPosition = column.position;
 

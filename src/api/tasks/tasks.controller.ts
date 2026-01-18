@@ -38,36 +38,34 @@ export class TasksController {
         return this.tasksService.create(payload, userId);
     }
 
-    @Get()
-    @HttpCode(HttpStatus.OK)
-    @ApiGetAllTasksDocSwaggerDecorator()
-    findAll(): Promise<Task[]> {
-        return this.tasksService.findAll();
-    }
-
     @Get(":id")
     @HttpCode(HttpStatus.OK)
+    @UseGuards(AuthGuard)
     @ApiGetOneTaskSwaggerDecorator()
-    findOne(@Param("id", ParseUUIDPipe) id: string): Promise<Task> {
-        return this.tasksService.findOne(id);
+    findOne(@AccessToken() userId: string, @Param("id", ParseUUIDPipe) id: string): Promise<Task> {
+        return this.tasksService.findOne(id, userId);
     }
 
     @Patch(":id")
     @HttpCode(HttpStatus.OK)
+    @UseGuards(AuthGuard)
     @ApiUpdateTaskSwaggerDecorator()
     update(
+        @AccessToken() userId: string,
         @Param("id", ParseUUIDPipe) id: string,
         @Body(new ZodValidationPipe(taskUpdateSchema)) payload: TaskUpdate,
     ): Promise<Task> {
-        return this.tasksService.update(id, payload);
+        return this.tasksService.update(id, payload, userId);
     }
 
     @Patch(":id/reorder")
     @HttpCode(HttpStatus.OK)
+    @UseGuards(AuthGuard)
     reorder(
+        @AccessToken() userId: string,
         @Param("id", ParseUUIDPipe) id: string,
         @Body(new ZodValidationPipe(taskReorderSchema)) payload: TaskReorder,
     ): Promise<Task> {
-        return this.tasksService.reorder(id, payload.newOrder, payload.newColumnId);
+        return this.tasksService.reorder(id, payload.newOrder, userId, payload.newColumnId);
     }
 }

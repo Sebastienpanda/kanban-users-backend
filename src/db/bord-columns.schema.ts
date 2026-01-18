@@ -4,12 +4,16 @@ import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { Task, tasks } from "./task.schema";
 import { workspaces } from "./workspace.schema";
+import { neonAuthUsers } from "@db/users.schema";
 
 export const boardColumns = pgTable("board_columns", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 50 }).notNull(),
     workspaceId: uuid("workspace_id")
-        .references(() => workspaces.id, { onDelete: "cascade" })
+        .references(() => workspaces.id)
+        .notNull(),
+    userId: uuid("user_id")
+        .references(() => neonAuthUsers.id)
         .notNull(),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", {
@@ -47,13 +51,14 @@ export type BoardColumnsReorder = z.infer<typeof boardColumnsReorderSchema>;
 export const boardColumnsInsertSchema = createInsertSchema(boardColumns)
     .omit({
         id: true,
+        userId: true,
         createdAt: true,
         updatedAt: true,
         position: true,
     })
     .extend({
         name: z.string().trim().min(5, "Le nom de la colonne doit contenir au moins 5 caractères"),
-        workspaceId: z.string().uuid("L'ID du workspace doit être un UUID valide"),
+        workspaceId: z.uuid("L'ID du workspace doit être un UUID valide"),
     });
 
 export const boardColumnsReorderSchema = z.object({
@@ -63,6 +68,7 @@ export const boardColumnsReorderSchema = z.object({
 export const boardColumnsUpdateSchema = createUpdateSchema(boardColumns)
     .omit({
         id: true,
+        userId: true,
         createdAt: true,
         updatedAt: true,
         position: true,
@@ -70,8 +76,8 @@ export const boardColumnsUpdateSchema = createUpdateSchema(boardColumns)
     .partial()
     .extend({
         name: z.string().trim().min(5, "Le nom de la colonne doit contenir au moins 5 caractères").optional(),
-        workspaceId: z.string().uuid("L'ID du workspace doit être un UUID valide").optional(),
+        workspaceId: z.uuid("L'ID du workspace doit être un UUID valide").optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
-        message: "Le champ ne peux pas être vide",
+        message: "Au moins un champ doit être fourni pour la mise à jour",
     });

@@ -1,9 +1,11 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { DrizzleService } from "@drizzle/drizzle.service";
-import { and, asc, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
+import { and, eq, gt, gte, lt, lte, max, sql } from "drizzle-orm";
 import { Task, TaskInsert, tasks, TaskUpdate } from "@db/task.schema";
 import { boardColumns } from "@db/bord-columns.schema";
 import { EventsGateway } from "../../websockets/events.gateway";
+import { byIdAndUser } from "@common/query-helpers";
+import { statuses } from "@db/statuses.schema";
 
 @Injectable()
 export class TasksService {
@@ -19,10 +21,30 @@ export class TasksService {
             .where(eq(tasks.title, payload.title))
             .limit(1);
 
-        console.log("[TasksService] Résultat select:", existing);
-
         if (existing.length > 0) {
             throw new ConflictException("Tâche déjà existante");
+        }
+
+        const [column] = await this.drizzleService.db
+            .select()
+            .from(boardColumns)
+            .where(byIdAndUser(boardColumns, payload.columnId, userId))
+            .limit(1);
+
+        if (!column) {
+            throw new NotFoundException("La colonne n'existe pas ou ne vous appartient pas");
+        }
+
+        if (payload.statusId) {
+            const [status] = await this.drizzleService.db
+                .select()
+                .from(statuses)
+                .where(byIdAndUser(statuses, payload.statusId, userId))
+                .limit(1);
+
+            if (!status) {
+                throw new NotFoundException("Le statut n'existe pas ou ne vous appartient pas");
+            }
         }
 
         const [maxOrderResult] = await this.drizzleService.db
@@ -30,7 +52,7 @@ export class TasksService {
             .from(tasks)
             .where(eq(tasks.columnId, payload.columnId));
 
-        const nextOrder = maxOrderResult.maxOrder !== null ? maxOrderResult.maxOrder + 1 : 0;
+        const nextOrder = maxOrderResult.maxOrder === null ? 0 : maxOrderResult.maxOrder + 1;
 
         const [newTask] = await this.drizzleService.db
             .insert(tasks)
@@ -41,84 +63,69 @@ export class TasksService {
             })
             .returning();
 
-        console.log(`[TasksService] Tâche créée, émission websocket...`);
         this.eventsGateway.emitTaskCreated(newTask);
-        console.log(`[TasksService] Websocket émis`);
 
         return newTask;
     }
 
-    findAll(): Promise<Task[]> {
-        return this.drizzleService.db.select().from(tasks).orderBy(asc(tasks.order));
-    }
-
-    async findOne(id: string): Promise<Task> {
-        const [data] = await this.drizzleService.db.select().from(tasks).where(eq(tasks.id, id));
+    async findOne(id: string, userId: string): Promise<Task> {
+        const [data] = await this.drizzleService.db
+            .select()
+            .from(tasks)
+            .where(byIdAndUser(tasks, id, userId));
 
         if (!data) {
-            throw new NotFoundException("La tâche n'existe pas");
+            throw new NotFoundException("La tâche n'existe pas ou ne vous appartient pas");
         }
 
         return data;
     }
 
-    async update(id: string, payload: TaskUpdate): Promise<Task> {
-        const oldTask = await this.findOne(id);
+    async update(id: string, payload: TaskUpdate, userId: string): Promise<Task> {
+        const oldTask = await this.findOne(id, userId);
 
-        // Si le status change, on doit aussi changer la colonne
-        if (payload.status && payload.status !== oldTask.status) {
-            // Récupérer la colonne actuelle pour trouver le workspace
-            const [currentColumn] = await this.drizzleService.db
+        // Vérifier que le nouveau statut appartient à l'utilisateur si fourni
+        if (payload.statusId) {
+            const [status] = await this.drizzleService.db
                 .select()
-                .from(boardColumns)
-                .where(eq(boardColumns.id, oldTask.columnId))
+                .from(statuses)
+                .where(byIdAndUser(statuses, payload.statusId, userId))
                 .limit(1);
 
-            // Trouver la colonne correspondant au nouveau status dans le même workspace
-            const targetColumnName = this.getColumnNameFromStatus(payload.status);
-            const [targetColumn] = await this.drizzleService.db
-                .select()
-                .from(boardColumns)
-                .where(
-                    and(
-                        eq(boardColumns.workspaceId, currentColumn.workspaceId),
-                        eq(boardColumns.name, targetColumnName),
-                    ),
-                )
-                .limit(1);
-
-            if (!targetColumn) {
-                throw new NotFoundException(`La colonne "${targetColumnName}" n'existe pas dans ce workspace`);
+            if (!status) {
+                throw new NotFoundException("Le statut n'existe pas ou ne vous appartient pas");
             }
-
-            // Calculer le nouvel ordre (à la fin de la colonne cible)
-            const [maxOrderResult] = await this.drizzleService.db
-                .select({ maxOrder: max(tasks.order) })
-                .from(tasks)
-                .where(eq(tasks.columnId, targetColumn.id));
-
-            const newOrder = maxOrderResult.maxOrder !== null ? maxOrderResult.maxOrder + 1 : 0;
-
-            const [updated] = await this.drizzleService.db
-                .update(tasks)
-                .set({ ...payload, columnId: targetColumn.id, order: newOrder })
-                .where(eq(tasks.id, id))
-                .returning();
-
-            this.eventsGateway.emitTaskStatusChanged(updated, oldTask.status);
-
-            return updated;
         }
 
-        const [updated] = await this.drizzleService.db.update(tasks).set(payload).where(eq(tasks.id, id)).returning();
+        // Vérifier que la nouvelle colonne appartient à l'utilisateur si fournie
+        if (payload.columnId && payload.columnId !== oldTask.columnId) {
+            const [column] = await this.drizzleService.db
+                .select()
+                .from(boardColumns)
+                .where(byIdAndUser(boardColumns, payload.columnId, userId))
+                .limit(1);
 
-        this.eventsGateway.emitTaskUpdated(updated);
+            if (!column) {
+                throw new NotFoundException("La colonne n'existe pas ou ne vous appartient pas");
+            }
+        }
+
+        const [updated] = await this.drizzleService.db
+            .update(tasks)
+            .set(payload)
+            .where(byIdAndUser(tasks, id, userId))
+            .returning();
+
+        if (payload.statusId && payload.statusId !== oldTask.statusId) {
+            this.eventsGateway.emitTaskStatusChanged(updated, oldTask.statusId);
+        } else {
+            this.eventsGateway.emitTaskUpdated(updated);
+        }
 
         return updated;
     }
-
-    async reorder(id: string, newOrder: number, newColumnId?: string): Promise<Task> {
-        const task = await this.findOne(id);
+    async reorder(id: string, newOrder: number, userId: string, newColumnId?: string): Promise<Task> {
+        const task = await this.findOne(id, userId);
 
         const oldOrder = task.order;
         const oldColumnId = task.columnId;
@@ -126,36 +133,25 @@ export class TasksService {
 
         if (newColumnId && newColumnId !== oldColumnId) {
             const updatedTask = await this.drizzleService.db.transaction(async (tx) => {
-                // Récupérer la colonne cible pour obtenir le status correspondant
                 const [targetColumn] = await tx
                     .select()
                     .from(boardColumns)
-                    .where(eq(boardColumns.id, targetColumnId))
+                    .where(byIdAndUser(boardColumns, targetColumnId, userId))
                     .limit(1);
 
                 if (!targetColumn) {
-                    throw new NotFoundException("La colonne cible n'existe pas");
+                    throw new NotFoundException("La colonne cible n'existe pas ou ne vous appartient pas");
                 }
 
-                const newStatus = this.getStatusFromColumnName(targetColumn.name);
-
-                // Décrémenter les tâches dans l'ancienne colonne
                 await tx
                     .update(tasks)
                     .set({ order: sql`${tasks.order} - 1` })
                     .where(and(eq(tasks.columnId, oldColumnId), gt(tasks.order, oldOrder)));
 
-                // Incrémenter les tâches dans la nouvelle colonne pour faire de la place
-                await tx
-                    .update(tasks)
-                    .set({ order: sql`${tasks.order} + 1` })
-                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)));
-
-                // Mettre à jour la tâche avec le nouveau order, columnId ET status
                 const [result] = await tx
                     .update(tasks)
-                    .set({ order: newOrder, columnId: targetColumnId, status: newStatus })
-                    .where(eq(tasks.id, id))
+                    .set({ order: sql`${tasks.order} + 1` })
+                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)))
                     .returning();
 
                 return result;
@@ -186,31 +182,16 @@ export class TasksService {
                     );
             }
 
-            const [result] = await tx.update(tasks).set({ order: newOrder }).where(eq(tasks.id, id)).returning();
+            const [result] = await tx
+                .update(tasks)
+                .set({ order: newOrder })
+                .where(byIdAndUser(tasks, id, userId))
+                .returning();
 
             return result;
         });
 
         this.eventsGateway.emitTaskReordered(updatedTask);
         return updatedTask;
-    }
-
-    private getStatusFromColumnName(columnName: string): "todo" | "in_progress" | "done" {
-        const normalizedName = columnName.toLowerCase().trim();
-
-        if (normalizedName === "à faire") return "todo";
-        if (normalizedName === "en cours") return "in_progress";
-        if (normalizedName === "terminé") return "done";
-
-        throw new Error(`Nom de colonne invalide: ${columnName}`);
-    }
-
-    private getColumnNameFromStatus(status: "todo" | "in_progress" | "done"): string {
-        const mapping: Record<string, string> = {
-            todo: "À faire",
-            in_progress: "En cours",
-            done: "Terminé",
-        };
-        return mapping[status];
     }
 }

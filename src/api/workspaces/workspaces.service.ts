@@ -1,16 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import {
-    Workspace,
-    WorkspaceInsert,
-    workspaces,
-    WorkspaceUpdate,
-    WorkspaceWithColumnsAndTasks,
-} from "@db/workspace.schema";
+import { Workspace, WorkspaceInsert, workspaces, WorkspaceUpdate } from "@db/workspace.schema";
 import { DrizzleService } from "@drizzle/drizzle.service";
-import { asc, eq } from "drizzle-orm";
-import { boardColumns } from "@db/bord-columns.schema";
-import { tasks } from "@db/task.schema";
+import { eq } from "drizzle-orm";
 import { EventsGateway } from "../../websockets/events.gateway";
+import { byIdAndUser } from "@common/query-helpers";
 
 @Injectable()
 export class WorkspacesService {
@@ -19,7 +12,7 @@ export class WorkspacesService {
         private readonly eventsGateway: EventsGateway,
     ) {}
 
-    async create(payload: WorkspaceInsert): Promise<Workspace> {
+    async create(payload: WorkspaceInsert, userId: string): Promise<Workspace> {
         const existing = await this.drizzleService.db
             .select()
             .from(workspaces)
@@ -32,7 +25,8 @@ export class WorkspacesService {
         const [newWorkspace] = await this.drizzleService.db
             .insert(workspaces)
             .values({
-                name: payload.name,
+                ...payload,
+                userId,
             })
             .returning();
 
@@ -40,45 +34,27 @@ export class WorkspacesService {
         return newWorkspace;
     }
 
-    findAll(): Promise<Workspace[]> {
-        return this.drizzleService.db.select().from(workspaces);
-    }
-
-    async findOne(id: string): Promise<WorkspaceWithColumnsAndTasks> {
-        return this.findWorkspaceWithRelations(id);
-    }
-
-    async findOneWithColumns(id: string): Promise<WorkspaceWithColumnsAndTasks> {
-        return this.findWorkspaceWithRelations(id);
-    }
-
-    private async findWorkspaceWithRelations(id: string): Promise<WorkspaceWithColumnsAndTasks> {
-        const workspace = await this.drizzleService.db.query.workspaces.findFirst({
-            where: eq(workspaces.id, id),
-            with: {
-                columns: {
-                    orderBy: asc(boardColumns.position),
-                    with: {
-                        tasks: {
-                            orderBy: asc(tasks.order),
-                        },
-                    },
-                },
-            },
-        });
+    async findOne(id: string, userId: string): Promise<Workspace> {
+        const [workspace] = await this.drizzleService.db
+            .select()
+            .from(workspaces)
+            .where(byIdAndUser(workspaces, id, userId));
 
         if (!workspace) {
-            throw new NotFoundException("Le workspace n'existe pas");
+            throw new NotFoundException("Le workspace n'existe pas ou ne vous appartient pas");
         }
 
         return workspace;
     }
 
-    async update(id: string, payload: WorkspaceUpdate): Promise<Workspace> {
+    async update(id: string, payload: WorkspaceUpdate, userId: string): Promise<Workspace> {
+        // Vérifier que le workspace appartient à l'utilisateur
+        await this.findOne(id, userId);
+
         const [updated] = await this.drizzleService.db
             .update(workspaces)
             .set(payload)
-            .where(eq(workspaces.id, id))
+            .where(byIdAndUser(workspaces, id, userId))
             .returning();
 
         return updated;

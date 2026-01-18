@@ -21,6 +21,7 @@
         "db:seed": "tsx src/db/seed.ts"
     },
     "dependencies": {
+        "@fastify/helmet": "^13.0.2",
         "@fastify/static": "^9.0.0",
         "@neondatabase/serverless": "^1.0.2",
         "@nestjs/common": "^11.0.1",
@@ -29,6 +30,7 @@
         "@nestjs/platform-fastify": "^11.1.11",
         "@nestjs/platform-socket.io": "^11.1.11",
         "@nestjs/swagger": "^11.2.3",
+        "@nestjs/throttler": "^6.5.0",
         "@nestjs/websockets": "^11.1.11",
         "dotenv": "^17.2.3",
         "drizzle-orm": "^0.45.1",

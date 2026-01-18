@@ -3,10 +3,15 @@ import { InferInsertModel, InferSelectModel, relations, sql } from "drizzle-orm"
 import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { boardColumns, BoardColumnWithTasks } from "./bord-columns.schema";
+import { neonAuthUsers } from "@db/users.schema";
+import { statuses } from "@db/statuses.schema";
 
 export const workspaces = pgTable("workspaces", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 50 }).unique().notNull(),
+    userId: uuid("user_id")
+        .references(() => neonAuthUsers.id)
+        .notNull(),
     createdAt: timestamp("created_at", {
         precision: 3,
         withTimezone: true,
@@ -24,6 +29,7 @@ export const workspaces = pgTable("workspaces", {
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
     columns: many(boardColumns),
+    statuses: many(statuses),
 }));
 
 export type Workspace = InferSelectModel<typeof workspaces>;
@@ -35,17 +41,17 @@ export type WorkspaceWithColumnsAndTasks = Workspace & {
 };
 
 export const workspaceInsertSchema = createInsertSchema(workspaces)
-    .omit({ id: true })
+    .omit({ id: true, userId: true, createdAt: true, updatedAt: true })
     .extend({
         name: z.string().trim().min(5, "Le nom du workspace doit contenir au moins 5 caractères"),
     });
 
 export const workspaceUpdateSchema = createUpdateSchema(workspaces)
-    .omit({ id: true })
+    .omit({ id: true, userId: true, createdAt: true, updatedAt: true })
     .partial()
     .extend({
-        name: z.string().trim().min(5, "Le nom du workspace doit contenir au moins 5 caractères"),
+        name: z.string().trim().min(5, "Le nom du workspace doit contenir au moins 5 caractères").optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
-        message: "Vous ne pouvez pas update avec un champ vide",
+        message: "Au moins un champ doit être fourni pour la mise à jour",
     });
