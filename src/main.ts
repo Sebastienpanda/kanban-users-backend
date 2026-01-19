@@ -20,11 +20,23 @@ async function bootstrap() {
     app.setGlobalPrefix("/api");
 
     // Configuration de Helmet pour la sécurité
-    await app.register(helmet);
+    await app.register(helmet, {
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: [`'self'`],
+                styleSrc: [`'self'`, `'unsafe-inline'`],
+                imgSrc: [`'self'`, "data:", "https:"],
+                scriptSrc: [`'self'`],
+            },
+        },
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+    });
 
     app.enableCors({
         origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
         methods: ["GET", "POST", "PATCH"],
+        allowedHeaders: ["Content-Type", "Authorization"],
     });
     app.useGlobalFilters(new AllExceptionsFilter());
 
