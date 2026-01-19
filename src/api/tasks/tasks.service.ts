@@ -18,7 +18,7 @@ export class TasksService {
         const existing = await this.drizzleService.db
             .select()
             .from(tasks)
-            .where(eq(tasks.title, payload.title))
+            .where(and(eq(tasks.title, payload.title), eq(tasks.columnId, payload.columnId), eq(tasks.userId, userId)))
             .limit(1);
 
         if (existing.length > 0) {
