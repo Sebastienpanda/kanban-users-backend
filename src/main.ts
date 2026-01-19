@@ -20,16 +20,7 @@ async function bootstrap() {
     app.setGlobalPrefix("/api");
 
     // Configuration de Helmet pour la sécurité
-    await app.register(helmet, {
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: [`'self'`],
-                styleSrc: [`'self'`, `'unsafe-inline'`],
-                imgSrc: [`'self'`, "data:", "validator.swagger.io"],
-                scriptSrc: [`'self'`, `https: 'unsafe-inline'`],
-            },
-        },
-    });
+    await app.register(helmet);
 
     app.enableCors({
         origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],

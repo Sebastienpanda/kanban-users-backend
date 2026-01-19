@@ -91,6 +91,7 @@ export class BoardColumnsService {
             .where(byIdAndUser(boardColumns, id, userId))
             .returning();
 
+        this.eventsGateway.emitColumnUpdated(updated);
         return updated;
     }
 

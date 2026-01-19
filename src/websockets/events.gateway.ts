@@ -106,9 +106,19 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.emitToUser(column.userId, "column:created", column);
     }
 
+    emitColumnUpdated(column: BoardColumns): void {
+        console.log(`[WS] Émission column:updated`, column);
+        this.emitToUser(column.userId, "column:updated", column);
+    }
+
     emitWorkspaceCreated(workspace: Workspace): void {
         console.log(`[WS] Émission workspace:created`, workspace);
         this.emitToUser(workspace.userId, "workspace:created", workspace);
+    }
+
+    emitWorkspaceUpdated(workspace: Workspace): void {
+        console.log(`[WS] Émission workspace:updated`, workspace);
+        this.emitToUser(workspace.userId, "workspace:updated", workspace);
     }
 
     emitStatusCreated(status: Statuses): void {

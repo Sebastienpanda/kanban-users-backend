@@ -57,6 +57,7 @@ export class WorkspacesService {
             .where(byIdAndUser(workspaces, id, userId))
             .returning();
 
+        this.eventsGateway.emitWorkspaceUpdated(updated);
         return updated;
     }
 }
