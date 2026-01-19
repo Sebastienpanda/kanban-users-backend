@@ -148,10 +148,15 @@ export class TasksService {
                     .set({ order: sql`${tasks.order} - 1` })
                     .where(and(eq(tasks.columnId, oldColumnId), gt(tasks.order, oldOrder)));
 
-                const [result] = await tx
+                await tx
                     .update(tasks)
                     .set({ order: sql`${tasks.order} + 1` })
-                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)))
+                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)));
+
+                const [result] = await tx
+                    .update(tasks)
+                    .set({ columnId: targetColumnId, order: newOrder })
+                    .where(byIdAndUser(tasks, id, userId))
                     .returning();
 
                 return result;
