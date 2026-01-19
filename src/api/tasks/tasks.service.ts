@@ -18,7 +18,7 @@ export class TasksService {
         const existing = await this.drizzleService.db
             .select()
             .from(tasks)
-            .where(eq(tasks.title, payload.title))
+            .where(and(eq(tasks.title, payload.title), eq(tasks.columnId, payload.columnId), eq(tasks.userId, userId)))
             .limit(1);
 
         if (existing.length > 0) {
@@ -148,10 +148,15 @@ export class TasksService {
                     .set({ order: sql`${tasks.order} - 1` })
                     .where(and(eq(tasks.columnId, oldColumnId), gt(tasks.order, oldOrder)));
 
-                const [result] = await tx
+                await tx
                     .update(tasks)
                     .set({ order: sql`${tasks.order} + 1` })
-                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)))
+                    .where(and(eq(tasks.columnId, targetColumnId), gte(tasks.order, newOrder)));
+
+                const [result] = await tx
+                    .update(tasks)
+                    .set({ columnId: targetColumnId, order: newOrder })
+                    .where(byIdAndUser(tasks, id, userId))
                     .returning();
 
                 return result;
