@@ -48,10 +48,6 @@ USER nestjs
 # ✅ Exposer le port 3000
 EXPOSE 3000
 
-# ✅ Variables d'environnement par défaut
-ENV NODE_ENV=production
-ENV PORT=3000
-
 # ✅ Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
