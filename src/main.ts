@@ -6,7 +6,6 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ConfigService } from "@nestjs/config";
-import helmet from "@fastify/helmet";
 
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -18,20 +17,6 @@ async function bootstrap() {
     );
 
     app.setGlobalPrefix("/api");
-
-    // Configuration de Helmet pour la sécurité
-    await app.register(helmet, {
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: [`'self'`],
-                styleSrc: [`'self'`, `'unsafe-inline'`],
-                imgSrc: [`'self'`, "data:", "https:"],
-                scriptSrc: [`'self'`],
-            },
-        },
-        crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: "cross-origin" },
-    });
 
     app.enableCors({
         origin: ["http://localhost:4200", "https://kanban.kanbano.fr"],
